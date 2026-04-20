@@ -1,0 +1,6 @@
+pandas
+plotly
+textblob
+statsmodels
+ipython
+nbformat
