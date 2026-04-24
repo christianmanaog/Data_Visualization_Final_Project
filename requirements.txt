@@ -4,3 +4,4 @@ textblob
 statsmodels
 ipython
 nbformat
+streanlit
