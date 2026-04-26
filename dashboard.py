@@ -41,6 +41,15 @@ def load_data():
     df["Review_Date"] = pd.to_datetime(df["Review_Date"])
     df["Year"] = df["Review_Date"].dt.year
     df["Sentiment_Class"] = df["Sentiment_Class"].astype(str)
+
+    # Prefer a human-readable product name when the dataset provides one.
+    # Fall back to ProductId so the dashboard still works with the current CSV.
+    product_name_candidates = ["ProductName", "Product_Name", "ProductTitle", "Product_Title", "Title", "Name"]
+    product_name_col = next((col for col in product_name_candidates if col in df.columns), None)
+    if product_name_col:
+        df["Product_Display"] = df[product_name_col].astype(str).fillna(df["ProductId"].astype(str))
+    else:
+        df["Product_Display"] = df["ProductId"].astype(str)
     return df
 
 
@@ -68,7 +77,6 @@ dff = df[
     df["Score"].isin(selected_ratings) &
     df["Sentiment_Class"].isin(selected_sentiments)
 ].copy()
-
 
 # ==============================================================================
 # STYLE HELPER
@@ -255,6 +263,37 @@ fig3.update_traces(
 fig3.update_xaxes(tickangle=40, nticks=22)
 fig3 = style(fig3, height=260, mb=24)
 st.plotly_chart(fig3, use_container_width=True)
+
+st.markdown("---")
+
+
+# ============================================================================
+# ROW B2 — Monthly Sentiment Polarity (leading indicator)
+# ============================================================================
+st.markdown("**Monthly Average Sentiment Polarity**")
+st.caption("Use this to test whether drops in sentiment polarity appear before declines in review volume.")
+
+monthly_sent = (
+    dff.groupby("Year_Month")["Sentiment_Polarity"].mean()
+    .reset_index()
+    .sort_values("Year_Month")
+)
+monthly_sent["Rolling_Polarity"] = monthly_sent["Sentiment_Polarity"].rolling(window=3, min_periods=1).mean()
+
+fig3b = px.line(
+    monthly_sent,
+    x="Year_Month",
+    y=["Sentiment_Polarity", "Rolling_Polarity"],
+    labels={"value": "Sentiment Polarity", "Year_Month": "Month", "variable": "Series"},
+    color_discrete_map={
+        "Sentiment_Polarity": COLORS["neutral"],
+        "Rolling_Polarity": COLORS["positive"],
+    },
+)
+fig3b.update_traces(mode="lines")
+fig3b.update_xaxes(tickangle=40, nticks=22)
+fig3b = style(fig3b, height=260, mb=24)
+st.plotly_chart(fig3b, use_container_width=True)
 
 st.markdown("---")
 
