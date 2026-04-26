@@ -43,13 +43,36 @@ def load_data():
     df["Sentiment_Class"] = df["Sentiment_Class"].astype(str)
 
     # Prefer a human-readable product name when the dataset provides one.
-    # Fall back to ProductId so the dashboard still works with the current CSV.
+    # If absent, derive a stakeholder-friendly name from product review summaries.
     product_name_candidates = ["ProductName", "Product_Name", "ProductTitle", "Product_Title", "Title", "Name"]
     product_name_col = next((col for col in product_name_candidates if col in df.columns), None)
     if product_name_col:
-        df["Product_Display"] = df[product_name_col].astype(str).fillna(df["ProductId"].astype(str))
+        df["Product_Display"] = (
+            df[product_name_col]
+            .astype(str)
+            .str.replace(r"\s+", " ", regex=True)
+            .str.strip()
+            .str.replace(r"[^A-Za-z0-9&'(),./\-\s]", "", regex=True)
+            .str.title()
+            .replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
+        )
     else:
-        df["Product_Display"] = df["ProductId"].astype(str)
+        df["Product_Display"] = pd.NA
+
+    if "Summary" in df.columns:
+        summary_name_map = (
+            df.assign(Summary=df["Summary"].astype(str).str.strip())
+            .loc[lambda x: x["Summary"].ne("") & x["Summary"].ne("nan")]
+            .groupby("ProductId")["Summary"]
+            .agg(lambda s: s.mode().iat[0] if not s.mode().empty else s.iloc[0])
+            .str.replace(r"\s+", " ", regex=True)
+            .str.replace(r"[^A-Za-z0-9&'(),./\-\s]", "", regex=True)
+            .str.title()
+            .str.slice(0, 48)
+        )
+        df["Product_Display"] = df["Product_Display"].fillna(df["ProductId"].map(summary_name_map))
+
+    df["Product_Display"] = df["Product_Display"].fillna("Unknown Product")
     return df
 
 
@@ -298,11 +321,11 @@ st.plotly_chart(fig3b, use_container_width=True)
 st.markdown("---")
 
 
-# ==============================================================================
+# ==================================``============================================
 # ROW C — Product Sentiment vs Sales Scatter  |  Top 15 Products
 # ==============================================================================
 prod_agg = (
-    dff.groupby("ProductId")
+    dff.groupby(["ProductId", "Product_Display"])
     .agg(
         Sales_Volume=("Sales_Volume_Proxy", "max"),
         Avg_Sentiment=("Sentiment_Polarity", "mean"),
@@ -335,23 +358,25 @@ with colC1:
     st.plotly_chart(fig4, use_container_width=True)
 
 with colC2:
-    st.markdown("**Top 15 Products — Review Volume vs. Avg Sentiment**")
-    st.caption("Bar height = total reviews (sales proxy). Color = avg sentiment polarity. Low-color, high-bar products signal quality risk.")
+    st.markdown("**Top 15 Highest Volume Products Colored by Average Sentiment**")
+    st.caption("Bar height = max sales-volume proxy. Color = average sentiment polarity. Low-color, high-bar products may indicate quality risk.")
 
-    top15 = prod_agg.nlargest(15, "Review_Count")
-    top15["Avg_Sentiment"] = top15["Avg_Sentiment"].round(3)
-    top15 = top15.sort_values("Review_Count", ascending=False)
+    prod_agg_eda8 = (
+        dff.groupby("Product_Label")
+        .agg({"Sentiment_Polarity": "mean", "Sales_Volume_Proxy": "max"})
+        .reset_index()
+    )
+    top_prods = prod_agg_eda8.nlargest(15, "Sales_Volume_Proxy")
 
     fig5 = px.bar(
-        top15, x="ProductId", y="Review_Count",
-        color="Avg_Sentiment",
-        color_continuous_scale=COLORS["teal_seq"],
-        labels={"ProductId": "Product ID", "Review_Count": "Total Reviews", "Avg_Sentiment": "Avg Sentiment"},
-        text="Review_Count",
+        top_prods,
+        x="Product_Label",
+        y="Sales_Volume_Proxy",
+        color="Sentiment_Polarity",
+        color_continuous_scale="RdYlGn",
+        title="EDA 8: Top 15 Highest Volume Products Colored by Average Sentiment",
     )
-    fig5.update_traces(textposition="outside")
-    fig5.update_coloraxes(colorbar_title="Avg<br>Polarity")
-    fig5.update_xaxes(tickangle=28)
+    fig5.update_xaxes(tickangle=45)
     fig5 = style(fig5, height=340, mb=28)
     st.plotly_chart(fig5, use_container_width=True)
 
