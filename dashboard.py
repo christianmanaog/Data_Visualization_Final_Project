@@ -122,8 +122,8 @@ def style(fig, height=320, mb=40, ml=50):
 # ==============================================================================
 # HEADER
 # ==============================================================================
-st.markdown("## Amazon Reviews — Sentiment & Sales Dashboard")
-st.caption("Sentiment distribution, sales velocity, and review behaviour across 99,990 product reviews.")
+st.markdown("## Consumer Sentiment & E-commerce Lead Indicator")
+st.caption("Analyze 99,990 Amazon reviews to visualize the relationship between sentiment polarity and sales-volume proxy across products over time.")
 st.markdown("---")
 
 
@@ -203,66 +203,6 @@ st.markdown("---")
 
 
 # ==============================================================================
-# ROW A — Sentiment Donut  |  Stacked Sentiment Mix Over Time
-# ==============================================================================
-colA1, colA2 = st.columns([1, 2.2])
-
-with colA1:
-    st.markdown("**Sentiment Distribution**")
-    st.caption("Share of review tone across all reviews")
-
-    sent_counts = dff["Sentiment_Class"].value_counts().reset_index()
-    sent_counts.columns = ["Sentiment", "Count"]
-    sent_counts["Sentiment"] = pd.Categorical(
-        sent_counts["Sentiment"], categories=["Positive", "Neutral", "Negative"], ordered=True
-    )
-    sent_counts = sent_counts.sort_values("Sentiment")
-
-    fig1 = px.pie(
-        sent_counts, names="Sentiment", values="Count", hole=0.58,
-        color="Sentiment",
-        color_discrete_map={
-            "Positive": COLORS["positive"],
-            "Neutral":  COLORS["neutral"],
-            "Negative": COLORS["negative"],
-        },
-    )
-    fig1.update_traces(textinfo="percent+label", pull=[0.03, 0, 0])
-    fig1 = style(fig1, height=320, mb=28)
-    st.plotly_chart(fig1, use_container_width=True)
-
-with colA2:
-    st.markdown("**Sentiment Mix Over Time**")
-    st.caption("Monthly volume by sentiment class — positive base grows proportionally as sales scale")
-
-    stacked = (
-        dff.groupby(["Year_Month", "Sentiment_Class"])
-        .size().reset_index(name="Count")
-        .sort_values("Year_Month")
-    )
-    stacked["Sentiment_Class"] = pd.Categorical(
-        stacked["Sentiment_Class"],
-        categories=["Negative", "Neutral", "Positive"], ordered=True,
-    )
-
-    fig2 = px.bar(
-        stacked, x="Year_Month", y="Count", color="Sentiment_Class",
-        color_discrete_map={
-            "Positive": COLORS["positive"],
-            "Neutral":  COLORS["neutral"],
-            "Negative": COLORS["negative"],
-        },
-        labels={"Year_Month": "Month", "Count": "Reviews", "Sentiment_Class": "Sentiment"},
-        barmode="stack",
-    )
-    fig2.update_xaxes(tickangle=40, nticks=22)
-    fig2 = style(fig2, height=320, mb=28)
-    st.plotly_chart(fig2, use_container_width=True)
-
-st.markdown("---")
-
-
-# ==============================================================================
 # ROW B — Monthly Sales Volume (full width)
 # ==============================================================================
 st.markdown("**Monthly Review Volume — Sales Velocity Proxy**")
@@ -317,6 +257,26 @@ fig3b.update_traces(mode="lines")
 fig3b.update_xaxes(tickangle=40, nticks=22)
 fig3b = style(fig3b, height=260, mb=24)
 st.plotly_chart(fig3b, use_container_width=True)
+
+st.markdown("---")
+
+
+# ==============================================================================
+# ROW B3 — Sentiment Polarity by Star Rating
+# ==============================================================================
+st.markdown("**Sentiment Polarity by Star Rating**")
+st.caption("Distribution of sentiment polarity across 1–5 star ratings. Lower-star groups should skew lower in polarity.")
+
+fig3c = px.box(
+    dff,
+    x="Score",
+    y="Sentiment_Polarity",
+    category_orders={"Score": [1, 2, 3, 4, 5]},
+    labels={"Score": "Star Rating", "Sentiment_Polarity": "Sentiment Polarity"},
+    points=False,
+)
+fig3c = style(fig3c, height=300, mb=24)
+st.plotly_chart(fig3c, use_container_width=True)
 
 st.markdown("---")
 
