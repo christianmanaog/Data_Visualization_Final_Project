@@ -1,10 +1,6 @@
 # ==============================================================================
 # SECTION 1: DATA ACQUISITION AND STRUCTURAL VALIDATION
 # ==============================================================================
-# In this section, we ingest the raw Amazon product review dataset and 
-# perform an initial structural assessment to identify missing values and 
-# verify data types.
-# ==============================================================================
 import pandas as pd
 import plotly.express as px
 from textblob import TextBlob
@@ -25,10 +21,6 @@ print(df.isnull().sum())
 # ==============================================================================
 # SECTION 2: DATA PREPROCESSING AND FEATURE ENGINEERING
 # ==============================================================================
-# This phase focuses on data cleaning, handling null values, and performing 
-# necessary type conversions. We also engineer preliminary features like 
-# 'Sales_Volume_Proxy', 'Review_Word_Count', and 'Product_Label'.
-# ==============================================================================
 
 # 1. Null Value Mitigation
 df_clean = df.dropna(subset=['ProfileName', 'Summary']).copy()
@@ -45,12 +37,9 @@ df_clean = pd.merge(df_clean, sales_proxy, on=['ProductId', 'Year_Month'], how='
 df_clean['Review_Word_Count'] = df_clean['Text'].astype(str).str.split().str.len()
 
 # 5. Data Enrichment: Targeted Product Mapping (100k Dataset Only)
-# We perfectly map our high-volume targets and outliers based strictly on the 100k dataset. 
-# We DO NOT remove the original Product IDs. We just create a label for the graphs.
-# 5. Data Enrichment: Targeted Product Mapping (100k Dataset Only)
-# We perfectly map our high-volume targets and outliers based strictly on the 100k dataset. 
-# We DO NOT remove the original Product IDs. We just create a label for the graphs.
+# Includes both the Top Volume Sellers AND the Bottom Sentiment Performers
 product_mapping = {
+    # Original Top Sellers
     'B0026RQTGE': 'Greenies Dental Chews (36oz)',
     'B002QWP89S': 'Greenies Dental Chews (27oz)', 
     'B0013NUGDE': 'Popchips Potato Chips',
@@ -77,31 +66,35 @@ product_mapping = {
     'B004MO6NI8': 'Energy Drink Assortment',
     'B001EQ55RW': 'Blue Diamond Cocoa Almonds',
     'B004ZIER34': 'Puroast Low Acid Coffee',
-    'B001BDDTB2': 'Petite Cuisine Cat Food'
+    'B001BDDTB2': 'Petite Cuisine Cat Food',
+    
+    # NEW: The 15 Lowest Sentiment Products (Min 10 reviews)
+    'B004ET5TP4': 'Peppermint Mocha Mix',
+    'B001E96JY2': 'Quick Lunch Ready Meal',
+    'B003SBRUC4': 'Gourmet Food Item',
+    'B000UGXWQ8': 'Tutti Frutti Sticks (80ct)',
+    'B000UH3QWW': 'Tutti Frutti Sticks',
+    'B000I5FN7C': 'Crunchy Dog Treats',
+    'B000YPKODY': 'Cracker Jack Snacks',
+    'B004EI4C7G': 'Weight Loss Supplement',
+    'B004G5ZYN8': 'Dog Chew Toy (Var A)',
+    'B004G5ZYQA': 'Dog Chew Toy (Var B)',
+    'B004G5ZYQU': 'Dog Chew Toy (Var C)',
+    'B0048HWXA6': 'Gag Gift Jelly Beans',
+    'B002TSA90C': 'Generic Hardware/Item',
+    'B001DW2RGO': '6-Hour Power Energy Drink',
+    'B000FPGZFY': 'Baby Food Purée'
 }
 
 # Apply the perfect manual mapping to our new Graph Label column. 
 # If it's not in our dictionary, the graph will just show the ID.
 df_clean['Product_Label'] = df_clean['ProductId'].map(product_mapping).fillna("ID: " + df_clean['ProductId'])
 
-# Apply the perfect manual mapping to our new Graph Label column. 
-# If it's not in our Top 15 dictionary, the graph will just show the ID.
-df_clean['Product_Label'] = df_clean['ProductId'].map(product_mapping).fillna("ID: " + df_clean['ProductId'])
-
 
 # ==============================================================================
 # SECTION 3: NATURAL LANGUAGE PROCESSING & SENTIMENT EXTRACTION
 # ==============================================================================
-# Utilizing the TextBlob lexicon-based approach, we process the unstructured 
-# 'Text' column to derive numerical sentiment polarity scores ranging 
-# from -1.0 (highly negative) to 1.0 (highly positive).
-# ==============================================================================
-
 def extract_sentiment_polarity(text):
-    """
-    Computes the sentiment polarity of a given text string.
-    Returns a float representing polarity (-1.0 to 1.0).
-    """
     try:
         return TextBlob(str(text)).sentiment.polarity
     except Exception:
@@ -117,15 +110,11 @@ df_clean['Sentiment_Class'] = pd.cut(df_clean['Sentiment_Polarity'],
                                      labels=['Negative', 'Neutral', 'Positive'])
 
 print("\nSample of Processed Data with Sentiment Features:")
-# Notice we keep both ProductId and Product_Label in the final dataset!
 display(df_clean[['ProductId', 'Product_Label', 'Score', 'Review_Word_Count', 'Sentiment_Polarity']].head())
 
 
 # ==============================================================================
 # SECTION 4: PRELIMINARY EXPLORATORY DATA ANALYSIS (EDA)
-# ==============================================================================
-# Formulating 10 initial exploratory visualizations to identify distribution 
-# anomalies, potential outliers, and preliminary correlations.
 # ==============================================================================
 
 # EDA 1: Global Distribution of Sentiment Polarity
@@ -177,7 +166,6 @@ fig7.update_xaxes(tickangle=45)
 fig7.show()
 
 # EDA 8: Top 15 Best-Selling Products by Sentiment
-# The graph uses Product_Label so the names look beautiful!
 prod_agg = df_clean.groupby('Product_Label').agg(
     {'Sentiment_Polarity':'mean', 'Sales_Volume_Proxy':'max'}
 ).reset_index()
@@ -190,7 +178,6 @@ fig8.update_xaxes(tickangle=45)
 fig8.show()
 
 # EDA 9: Product-Level Correlation (Sentiment vs Volume with Hover Info)
-# When you hover over a dot, it shows either the real name or the ID!
 fig9 = px.scatter(prod_agg, x='Sentiment_Polarity', y='Sales_Volume_Proxy', opacity=0.4,
                   title='EDA 9: Product-Level Correlation: Sentiment vs. Max Sales Volume Proxy',
                   hover_name='Product_Label',
@@ -203,13 +190,24 @@ fig10 = px.density_heatmap(df_clean, x='Score', y='Sentiment_Polarity', nbinsy=2
                            color_continuous_scale='Viridis')
 fig10.show()
 
+# NEW -> EDA 11: Bottom 15 Products by Lowest Average Sentiment
+# We calculate total reviews to filter out products with only 1 or 2 bad reviews.
+prod_agg_bottom = df_clean.groupby('Product_Label').agg(
+    {'Sentiment_Polarity': 'mean', 'ProductId': 'count'}
+).rename(columns={'ProductId': 'Total_Reviews'}).reset_index()
+
+# Filter for at least 10 reviews, then grab the 15 lowest scores
+bottom_prods = prod_agg_bottom[prod_agg_bottom['Total_Reviews'] >= 10].nsmallest(15, 'Sentiment_Polarity')
+
+fig11 = px.bar(bottom_prods, x='Product_Label', y='Sentiment_Polarity', color='Sentiment_Polarity',
+               title='EDA 11: Top 15 Products with the Lowest Average Sentiment (Min 10 Reviews)',
+               color_continuous_scale='Reds_r') # We use red to visually highlight negative sentiment
+fig11.update_xaxes(tickangle=45)
+fig11.show()
+
 
 # ==============================================================================
 # SECTION 5: DATA SERIALIZATION AND EXPORT
-# ==============================================================================
-# Committing the structured, cleaned, and feature-engineered DataFrame to 
-# a standard CSV format to support the subsequent high-fidelity dashboard 
-# development phase.
 # ==============================================================================
 
 # Isolate necessary features and omit redundant data to optimize storage

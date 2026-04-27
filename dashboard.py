@@ -281,7 +281,7 @@ st.plotly_chart(fig3c, use_container_width=True)
 st.markdown("---")
 
 
-# ==================================``============================================
+# ==============================================================================
 # ROW C — Product Sentiment vs Sales Scatter  |  Top 15 Products
 # ==============================================================================
 prod_agg = (
@@ -334,11 +334,40 @@ with colC2:
         y="Sales_Volume_Proxy",
         color="Sentiment_Polarity",
         color_continuous_scale="RdYlGn",
-        title="EDA 8: Top 15 Highest Volume Products Colored by Average Sentiment",
     )
     fig5.update_xaxes(tickangle=45)
     fig5 = style(fig5, height=340, mb=28)
     st.plotly_chart(fig5, use_container_width=True)
+
+st.markdown("---")
+
+# ==============================================================================
+# ROW D — Bottom 15 Products by Lowest Average Sentiment
+# ==============================================================================
+st.markdown("**Top 15 Products with the Lowest Average Sentiment (Min 10 Reviews)**")
+st.caption("Products with the lowest average sentiment score, filtered for at least 10 reviews to remove outliers.")
+
+prod_agg_bottom = (
+    dff.groupby("Product_Label")
+    .agg(
+        Sentiment_Polarity=("Sentiment_Polarity", "mean"),
+        Total_Reviews=("ProductId", "count")
+    )
+    .reset_index()
+)
+
+bottom_prods = prod_agg_bottom[prod_agg_bottom["Total_Reviews"] >= 10].nsmallest(15, "Sentiment_Polarity")
+
+fig6 = px.bar(
+    bottom_prods,
+    x="Product_Label",
+    y="Sentiment_Polarity",
+    color="Sentiment_Polarity",
+    color_continuous_scale="Reds_r",
+)
+fig6.update_xaxes(tickangle=45)
+fig6 = style(fig6, height=340, mb=28)
+st.plotly_chart(fig6, use_container_width=True)
 
 st.markdown("---")
 st.caption("Dashboard · Streamlit + Plotly · Amazon Fine Food Reviews (Kaggle) · Sentiment: TextBlob")
